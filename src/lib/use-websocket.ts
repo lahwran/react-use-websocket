@@ -30,7 +30,7 @@ export type Message = {
   data: any,
 }
 
-export const useWebSocket = (url: string, options: Options = DEFAULT_OPTIONS): [(message:any) => void, Message, ReadyStateEnum] => {
+export const useWebSocket = (url: string, options: Options = DEFAULT_OPTIONS): [(message:any) => void, Message, ReadyStateEnum, () => void] => {
   const [ lastMessage, setLastMessage ] = useState<Message | null>(null);
   const [ readyState, setReadyState ] = useState<ReadyStateState>({});
   const webSocketRef = useRef<any>(null);
@@ -48,21 +48,16 @@ export const useWebSocket = (url: string, options: Options = DEFAULT_OPTIONS): [
     webSocketRef.current && webSocketRef.current.send(message);
   }, []);
 
-  useEffect(() => {
-    let removeListeners;
+  const start: () => any = useCallback(() => {
+    createOrJoinSocket(webSocketRef, convertedUrl, setReadyState, options);
 
-    const start = () => {
-      createOrJoinSocket(webSocketRef, convertedUrl, setReadyState, options);
+    return attachListeners(webSocketRef.current, convertedUrl, {
+      setLastMessage,
+      setReadyState,
+    }, options, start, retryCount);
+  }, [webSocketRef, convertedUrl, setReadyState]);
 
-      removeListeners = attachListeners(webSocketRef.current, convertedUrl, {
-        setLastMessage,
-        setReadyState,
-      }, options, start, retryCount);
-    };
-
-    start();
-    return removeListeners;
-  }, [convertedUrl]);
+  useEffect(start, [convertedUrl]);
 
   useEffect(() => {
     if (staticOptionsCheck.current) throw new Error('The options object you pass must be static');
@@ -72,5 +67,5 @@ export const useWebSocket = (url: string, options: Options = DEFAULT_OPTIONS): [
 
   const readyStateFromUrl = readyState[convertedUrl] !== undefined ? readyState[convertedUrl] : READY_STATE_CONNECTING;
 
-  return [ sendMessage, lastMessage, readyStateFromUrl ];
+  return [ sendMessage, lastMessage, readyStateFromUrl, start ];
 };
